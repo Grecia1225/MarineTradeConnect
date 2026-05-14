@@ -118,6 +118,42 @@ class AppLocalizations {
     'sell_used':      'பழைய பொருட்கள் விற்க',
   };
 
+  static const _te = {
+    'marketplace':    'మార్కెట్',
+    'chat':           'సందేశాలు',
+    'tracking':       'ట్రాకింగ్',
+    'profile':        'ప్రొఫైల్',
+    'home':           'హోమ్',
+    'search':         'వెతకండి...',
+    'post_listing':   'లిస్టింగ్ పోస్ట్ చేయి',
+    'browse':         'బ్రౌజ్ చేయి',
+    'my_orders':      'నా ఆర్డర్లు',
+    'messages':       'సందేశాలు',
+    'add_to_cart':    'కార్ట్‌కు జోడించు',
+    'view_cart':      'కార్ట్ చూడు',
+    'place_order':    'ఆర్డర్ చేయి',
+    'contact_seller': 'విక్రేతను సంప్రదించు',
+    'sign_out':       'సైన్ అవుట్',
+    'app_theme':      'థీమ్',
+    'language':       'భాష',
+    'edit_profile':   'ప్రొఫైల్ సవరించు',
+    'notifications':  'నోటిఫికేషన్లు',
+    'privacy':        'గోప్యత',
+    'help':           'సహాయం',
+    'terms':          'నిబంధనలు',
+    'about':          'MTC గురించి',
+    'no_listings':    'లిస్టింగ్‌లు లేవు',
+    'cart_empty':     'కార్ట్ ఖాళీగా ఉంది',
+    'order_placed':   'ఆర్డర్ చేయబడింది!',
+    'good_morning':   'శుభోదయం',
+    'good_afternoon': 'శుభ మధ్యాహ్నం',
+    'good_evening':   'శుభ సాయంత్రం',
+    'recent_activity':'ఇటీవలి కార్యాచరణ',
+    'quick_actions':  'త్వరిత చర్యలు',
+    'secondhand':     'సెకండ్‌హ్యాండ్',
+    'sell_used':      'పాత వస్తువులు అమ్మండి',
+  };
+
   static const _ar = {
     'marketplace':    'السوق',
     'chat':           'الرسائل',
@@ -194,6 +230,7 @@ class AppLocalizations {
     final lang = locale.languageCode;
     final map = lang == 'hi' ? _hi
               : lang == 'ta' ? _ta
+              : lang == 'te' ? _te
               : lang == 'ar' ? _ar
               : lang == 'fr' ? _fr
               : _en;
@@ -207,12 +244,12 @@ class AppLocalizationsDelegate
 
   @override
   bool isSupported(Locale locale) =>
-      ['en', 'hi', 'ta', 'ar', 'fr'].contains(locale.languageCode);
+      ['en', 'hi', 'ta', 'te', 'ar', 'fr'].contains(locale.languageCode);
 
   @override
   Future<AppLocalizations> load(Locale locale) async =>
       AppLocalizations(locale);
 
   @override
-  bool shouldReload(AppLocalizationsDelegate old) => false;
+  bool shouldReload(AppLocalizationsDelegate old) => true;
 }
