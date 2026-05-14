@@ -3,21 +3,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
-
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _formKey = GlobalKey<FormState>();
+  final _formKey           = GlobalKey<FormState>();
   final _emailController    = TextEditingController();
   final _passwordController = TextEditingController();
-
-  // Focus nodes — Enter on email moves to password
-  final _emailFocus    = FocusNode();
-  final _passwordFocus = FocusNode();
-
-  bool _isLoading = false;
+  final _emailFocus         = FocusNode();
+  final _passwordFocus      = FocusNode();
+  bool _isLoading       = false;
   bool _obscurePassword = true;
 
   static const _gold = Color(0xFFF4A532);
@@ -25,10 +21,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    _emailFocus.dispose();
-    _passwordFocus.dispose();
+    _emailController.dispose(); _passwordController.dispose();
+    _emailFocus.dispose(); _passwordFocus.dispose();
     super.dispose();
   }
 
@@ -40,24 +34,11 @@ class _LoginScreenState extends State<LoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-      // Navigation is handled by StreamBuilder in main.dart
+      // _AuthGate in main.dart handles navigation automatically
     } on FirebaseAuthException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(_errorMessage(e.code)),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ));
-      }
+      if (mounted) _snack(_errorMessage(e.code), Colors.redAccent);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Something went wrong: $e'),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-        ));
-      }
+      if (mounted) _snack('Something went wrong: $e', Colors.redAccent);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -66,222 +47,288 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleForgotPassword() async {
     final email = _emailController.text.trim();
     if (email.isEmpty || !email.contains('@')) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Enter your email above first.'),
-        backgroundColor: Colors.orange,
-        behavior: SnackBarBehavior.floating,
-      ));
+      _snack('Enter your email above first.', Colors.orange);
       return;
     }
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Reset link sent to $email'),
-          backgroundColor: Colors.green.shade700,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ));
-      }
+      if (mounted) _snack('Reset link sent to $email', Colors.green);
     } on FirebaseAuthException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(_errorMessage(e.code)),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-        ));
-      }
+      if (mounted) _snack(_errorMessage(e.code), Colors.redAccent);
     }
+  }
+
+  void _snack(String msg, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: color,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ));
   }
 
   String _errorMessage(String code) {
     switch (code) {
-      case 'user-not-found':       return 'No account found with this email.';
-      case 'wrong-password':       return 'Incorrect password. Try again.';
-      case 'invalid-email':        return 'Invalid email address.';
-      case 'invalid-credential':   return 'Email or password is incorrect.';
-      case 'too-many-requests':    return 'Too many attempts. Try again later.';
-      case 'user-disabled':        return 'This account has been disabled.';
-      case 'network-request-failed': return 'No internet connection.';
-      default:                     return 'Login failed ($code). Please try again.';
+      case 'user-not-found':        return 'No account found with this email.';
+      case 'wrong-password':        return 'Incorrect password. Try again.';
+      case 'invalid-email':         return 'Invalid email address.';
+      case 'invalid-credential':    return 'Email or password is incorrect.';
+      case 'too-many-requests':     return 'Too many attempts. Try again later.';
+      case 'user-disabled':         return 'This account has been disabled.';
+      case 'network-request-failed':return 'No internet connection.';
+      default: return 'Login failed ($code). Please try again.';
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          SizedBox.expand(
-            child: Image.network(
-              'https://images.unsplash.com/photo-1505118380757-91f5f5632de0?w=800',
-              fit: BoxFit.cover,
-              loadingBuilder: (context, child, progress) =>
-                  progress == null ? child : Container(color: _navy),
-              errorBuilder: (_, __, ___) => Container(color: _navy),
-            ),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [_navy.withOpacity(0.75), _navy.withOpacity(0.92), _navy],
+      body: Stack(children: [
+        // Asset background - zero network data
+        SizedBox.expand(child: Image.asset(
+          'assets/images/login_bg.jpg',
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) =>
+              CustomPaint(painter: _AuthBgPainter(_navy, _gold)),
+        )),
+        // Dark overlay
+        Container(decoration: BoxDecoration(gradient: LinearGradient(
+          begin: Alignment.topCenter, end: Alignment.bottomCenter,
+          colors: [_navy.withOpacity(0.75), _navy.withOpacity(0.92), _navy],
+        ))),
+        // Gold top accent line
+        Positioned(top: 0, left: 0, right: 0,
+          child: Container(height: 3, decoration: const BoxDecoration(
+            gradient: LinearGradient(
+                colors: [Colors.transparent, _gold, Colors.transparent]),
+          ))),
+        SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 30),
+
+                  // Logo
+                  Center(child: Column(children: [
+                    Container(
+                      width: 76, height: 76,
+                      decoration: BoxDecoration(
+                        color: _gold.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(
+                            color: _gold.withOpacity(0.5), width: 1.5),
+                      ),
+                      child: const Icon(Icons.anchor, color: _gold, size: 36),
+                    ),
+                    const SizedBox(height: 18),
+                    const Text('Marine Trade Connect',
+                        style: TextStyle(color: Colors.white, fontSize: 22,
+                            fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                    const SizedBox(height: 6),
+                    Text("THE OCEAN'S MARKETPLACE",
+                        style: TextStyle(color: _gold.withOpacity(0.7),
+                            fontSize: 11, letterSpacing: 2.5,
+                            fontWeight: FontWeight.w600)),
+                  ])),
+
+                  const SizedBox(height: 52),
+
+                  _label('Email address'),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _emailController,
+                    focusNode: _emailFocus,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: _inputStyle('trader@marine.com'),
+                    onFieldSubmitted: (_) =>
+                        FocusScope.of(context).requestFocus(_passwordFocus),
+                    validator: (val) {
+                      if (val == null || val.trim().isEmpty) return 'Email required';
+                      if (!val.contains('@')) return 'Invalid email';
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  _label('Password'),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _passwordController,
+                    focusNode: _passwordFocus,
+                    obscureText: _obscurePassword,
+                    textInputAction: TextInputAction.done,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: _inputStyle('••••••••').copyWith(
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscurePassword
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                            color: Colors.white38, size: 20),
+                        onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword),
+                      ),
+                    ),
+                    onFieldSubmitted: (_) => _handleLogin(),
+                    validator: (val) {
+                      if (val == null || val.isEmpty) return 'Password required';
+                      if (val.length < 6) return 'Min 6 characters';
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: _handleForgotPassword,
+                      child: Text('Forgot password?',
+                          style: TextStyle(
+                              color: _gold.withOpacity(0.8), fontSize: 13)),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity, height: 56,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _handleLogin,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _gold, foregroundColor: _navy,
+                        disabledBackgroundColor: _gold.withOpacity(0.3),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                        elevation: 0,
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(width: 22, height: 22,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2))
+                          : const Text('Sign in',
+                              style: TextStyle(fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF060F1E),
+                                  letterSpacing: 0.5)),
+                    ),
+                  ),
+
+                  const SizedBox(height: 32),
+                  Row(children: [
+                    Expanded(child: Divider(
+                        color: Colors.white.withOpacity(0.08))),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: Text('NEW TO MARINE TRADE?',
+                          style: TextStyle(
+                              color: Colors.white.withOpacity(0.25),
+                              fontSize: 10, letterSpacing: 1.5)),
+                    ),
+                    Expanded(child: Divider(
+                        color: Colors.white.withOpacity(0.08))),
+                  ]),
+
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity, height: 56,
+                    child: OutlinedButton(
+                      onPressed: () =>
+                          Navigator.pushNamed(context, '/signup'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _gold,
+                        side: BorderSide(
+                            color: _gold.withOpacity(0.4), width: 1.5),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: const Text('Create an account',
+                          style: TextStyle(fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFFF4A532))),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          Positioned(
-            top: 0, left: 0, right: 0,
-            child: Container(height: 3, decoration: const BoxDecoration(
-              gradient: LinearGradient(colors: [Colors.transparent, _gold, Colors.transparent]),
-            )),
-          ),
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-
-                    const SizedBox(height: 30),
-
-                    // Logo
-                    Center(child: Column(children: [
-                      Container(
-                        width: 76, height: 76,
-                        decoration: BoxDecoration(
-                          color: _gold.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(color: _gold.withOpacity(0.5), width: 1.5),
-                        ),
-                        child: const Icon(Icons.anchor, color: _gold, size: 36),
-                      ),
-                      const SizedBox(height: 18),
-                      const Text('Marine Trade Connect', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
-                      const SizedBox(height: 6),
-                      Text("THE OCEAN'S MARKETPLACE", style: TextStyle(color: _gold.withOpacity(0.7), fontSize: 11, letterSpacing: 2.5, fontWeight: FontWeight.w600)),
-                    ])),
-
-                    const SizedBox(height: 52),
-
-                    _label('Email address'),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _emailController,
-                      focusNode: _emailFocus,
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: _inputStyle('trader@marine.com'),
-                      onFieldSubmitted: (_) => FocusScope.of(context).requestFocus(_passwordFocus),
-                      validator: (val) {
-                        if (val == null || val.trim().isEmpty) return 'Email required';
-                        if (!val.contains('@')) return 'Invalid email';
-                        return null;
-                      },
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    _label('Password'),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _passwordController,
-                      focusNode: _passwordFocus,
-                      obscureText: _obscurePassword,
-                      textInputAction: TextInputAction.done,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: _inputStyle('••••••••').copyWith(
-                        suffixIcon: IconButton(
-                          icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: Colors.white38, size: 20),
-                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                        ),
-                      ),
-                      onFieldSubmitted: (_) => _handleLogin(), // Enter submits
-                      validator: (val) {
-                        if (val == null || val.isEmpty) return 'Password required';
-                        if (val.length < 6) return 'Min 6 characters';
-                        return null;
-                      },
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: _handleForgotPassword,
-                        child: Text('Forgot password?', style: TextStyle(color: _gold.withOpacity(0.8), fontSize: 13)),
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    SizedBox(
-                      width: double.infinity, height: 56,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _handleLogin,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _gold, foregroundColor: _navy,
-                          disabledBackgroundColor: _gold.withOpacity(0.3),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          elevation: 0,
-                        ),
-                        child: _isLoading
-                          ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : const Text('Sign in', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF060F1E), letterSpacing: 0.5)),
-                      ),
-                    ),
-
-                    const SizedBox(height: 32),
-
-                    Row(children: [
-                      Expanded(child: Divider(color: Colors.white.withOpacity(0.08))),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        child: Text('NEW TO MARINE TRADE?', style: TextStyle(color: Colors.white.withOpacity(0.25), fontSize: 10, letterSpacing: 1.5)),
-                      ),
-                      Expanded(child: Divider(color: Colors.white.withOpacity(0.08))),
-                    ]),
-
-                    const SizedBox(height: 20),
-
-                    SizedBox(
-                      width: double.infinity, height: 56,
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pushNamed(context, '/signup'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: _gold,
-                          side: BorderSide(color: _gold.withOpacity(0.4), width: 1.5),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        ),
-                        child: const Text('Create an account', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFFF4A532))),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ]),
     );
   }
 
-  Widget _label(String text) => Text(text, style: TextStyle(color: Colors.white.withOpacity(0.65), fontSize: 13, fontWeight: FontWeight.w500, letterSpacing: 0.3));
+  Widget _label(String text) => Text(text,
+      style: TextStyle(color: Colors.white.withOpacity(0.65),
+          fontSize: 13, fontWeight: FontWeight.w500, letterSpacing: 0.3));
 
   InputDecoration _inputStyle(String hint) => InputDecoration(
     hintText: hint,
     hintStyle: TextStyle(color: Colors.white.withOpacity(0.2)),
     filled: true, fillColor: Colors.white.withOpacity(0.06),
     contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withOpacity(0.08))),
-    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withOpacity(0.08))),
-    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFF4A532), width: 1.5)),
-    errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.redAccent)),
-    focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.redAccent, width: 1.5)),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.white.withOpacity(0.08))),
+    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.white.withOpacity(0.08))),
+    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFF4A532), width: 1.5)),
+    errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.redAccent)),
+    focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.redAccent, width: 1.5)),
     errorStyle: const TextStyle(color: Colors.redAccent),
   );
+}
+
+// ── Shared canvas background for all auth screens ─────────────────────────────
+class _AuthBgPainter extends CustomPainter {
+  final Color navy;
+  final Color gold;
+  _AuthBgPainter(this.navy, this.gold);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Base
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
+        Paint()..color = navy);
+    // Top-right glow
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
+        Paint()..shader = RadialGradient(
+          colors: [gold.withOpacity(0.12), Colors.transparent],
+        ).createShader(Rect.fromCircle(
+            center: Offset(size.width, 0), radius: size.height * 0.7)));
+    // Bottom-left glow
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
+        Paint()..shader = RadialGradient(
+          colors: [gold.withOpacity(0.06), Colors.transparent],
+        ).createShader(Rect.fromCircle(
+            center: Offset(0, size.height), radius: size.height * 0.6)));
+    // Diagonal grid
+    final line = Paint()..color = gold.withOpacity(0.03)..strokeWidth = 1;
+    for (double x = -size.height; x < size.width + size.height; x += 40) {
+      canvas.drawLine(
+          Offset(x, 0), Offset(x + size.height, size.height), line);
+    }
+    // Subtle wave arcs
+    final arc = Paint()
+      ..color = gold.withOpacity(0.05)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    for (int i = 0; i < 3; i++) {
+      canvas.drawArc(
+        Rect.fromCircle(
+            center: Offset(size.width * 0.8, size.height * 0.8),
+            radius: size.height * (0.4 + i * 0.2)),
+        3.2, 1.2, false, arc,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_AuthBgPainter old) => false;
 }

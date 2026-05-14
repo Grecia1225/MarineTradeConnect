@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfileSetup extends StatefulWidget {
   const ProfileSetup({super.key});
@@ -11,29 +12,22 @@ class ProfileSetup extends StatefulWidget {
 class _ProfileSetupState extends State<ProfileSetup> {
   final _formKey = GlobalKey<FormState>();
 
-  // Common
   final _phoneCtrl    = TextEditingController();
   final _locationCtrl = TextEditingController();
   final _bioCtrl      = TextEditingController();
-
-  // Buyer only
   final _whatBuyCtrl  = TextEditingController();
   final _budgetCtrl   = TextEditingController();
-  final _portCtrl     = TextEditingController(); // preferred buying port
-
-  // Seller only
+  final _portCtrl     = TextEditingController();
   final _companyCtrl  = TextEditingController();
   final _productsCtrl = TextEditingController();
   final _licenseCtrl  = TextEditingController();
-
-  // Shipper / Agent only
   final _vesselCtrl   = TextEditingController();
   final _capacityCtrl = TextEditingController();
   final _routesCtrl   = TextEditingController();
   final _imoCtrl      = TextEditingController();
 
-  bool   _isLoading  = true;
-  String _role       = '';
+  bool   _isLoading = true;
+  String _role      = '';
 
   static const _gold = Color(0xFFF4A532);
   static const _navy = Color(0xFF060F1E);
@@ -51,13 +45,29 @@ class _ProfileSetupState extends State<ProfileSetup> {
   Future<void> _loadRole() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) { setState(() => _isLoading = false); return; }
-    final doc = await FirebaseFirestore.instance
-        .collection('users').doc(uid).get();
-    if (mounted) {
-      setState(() {
-        _role      = (doc.data()?['role'] ?? '').toString();
-        _isLoading = false;
-      });
+
+    // Try SharedPreferences first — instant
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString('user_role_$uid');
+      if (cached != null && cached.isNotEmpty) {
+        if (mounted) setState(() { _role = cached; _isLoading = false; });
+        return;
+      }
+    } catch (_) {}
+
+    // Fallback to Firestore
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users').doc(uid).get();
+      if (mounted) {
+        setState(() {
+          _role      = (doc.data()?['role'] ?? '').toString();
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -85,33 +95,36 @@ class _ProfileSetupState extends State<ProfileSetup> {
       };
 
       if (_isBuyer) {
-        data['whatTheyBuy']     = _whatBuyCtrl.text.trim();
-        data['monthlyBudget']   = _budgetCtrl.text.trim();
-        data['preferredPort']   = _portCtrl.text.trim();
+        data['whatTheyBuy']   = _whatBuyCtrl.text.trim();
+        data['monthlyBudget'] = _budgetCtrl.text.trim();
+        data['preferredPort'] = _portCtrl.text.trim();
       } else if (_isSeller) {
         data['company']         = _companyCtrl.text.trim();
         data['productsOffered'] = _productsCtrl.text.trim();
         data['exportLicense']   = _licenseCtrl.text.trim();
       } else {
-        data['vesselName']      = _vesselCtrl.text.trim();
-        data['cargoCapacity']   = _capacityCtrl.text.trim();
-        data['routesServed']    = _routesCtrl.text.trim();
-        data['imoNumber']       = _imoCtrl.text.trim();
+        data['vesselName']    = _vesselCtrl.text.trim();
+        data['cargoCapacity'] = _capacityCtrl.text.trim();
+        data['routesServed']  = _routesCtrl.text.trim();
+        data['imoNumber']     = _imoCtrl.text.trim();
       }
 
       await FirebaseFirestore.instance
           .collection('users').doc(uid)
           .set(data, SetOptions(merge: true));
 
+      // ✅ Save profileComplete to SharedPreferences so main.dart routes instantly
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('profile_complete_$uid', true);
+      await prefs.setString('user_role_$uid', _role);
+
       if (mounted) Navigator.pushReplacementNamed(context, '/dashboard');
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-        ));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Error: $e'),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -128,10 +141,11 @@ class _ProfileSetupState extends State<ProfileSetup> {
 
     return Scaffold(
       body: Stack(children: [
-        SizedBox.expand(child: Image.network(
-          'https://images.unsplash.com/photo-1520870028842-5f06cb876136?w=800',
+        SizedBox.expand(child: Image.asset(
+          'assets/images/role_bg.jpg',
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(color: _navy),
+          errorBuilder: (_, __, ___) =>
+              CustomPaint(painter: _AuthBgPainter(_navy, _gold)),
         )),
         Container(decoration: BoxDecoration(gradient: LinearGradient(
           begin: Alignment.topCenter, end: Alignment.bottomCenter,
@@ -140,7 +154,7 @@ class _ProfileSetupState extends State<ProfileSetup> {
         Positioned(top: 0, left: 0, right: 0,
           child: Container(height: 3, decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Colors.transparent, _gold, Colors.transparent]),
+                colors: [Colors.transparent, _gold, Colors.transparent]),
           ))),
         SafeArea(
           child: SingleChildScrollView(
@@ -150,8 +164,6 @@ class _ProfileSetupState extends State<ProfileSetup> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
-                  // Step indicator
                   Row(children: List.generate(3, (i) => Expanded(
                     child: Container(
                       margin: EdgeInsets.only(right: i < 2 ? 6 : 0),
@@ -162,17 +174,13 @@ class _ProfileSetupState extends State<ProfileSetup> {
                       ),
                     ),
                   ))),
-
                   const SizedBox(height: 28),
-
                   Text(_headline, style: const TextStyle(
                       color: Colors.white, fontSize: 26,
                       fontWeight: FontWeight.w800)),
                   const SizedBox(height: 6),
                   Text(_subline, style: TextStyle(
                       color: _gold.withOpacity(0.65), fontSize: 13)),
-
-                  // Role badge
                   const SizedBox(height: 14),
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -190,10 +198,8 @@ class _ProfileSetupState extends State<ProfileSetup> {
                           fontWeight: FontWeight.w700, letterSpacing: 1.2)),
                     ]),
                   ),
-
                   const SizedBox(height: 28),
 
-                  // ── COMMON: Phone ──────────────────────────────
                   _label('Phone number'),
                   const SizedBox(height: 8),
                   _textField(_phoneCtrl,
@@ -206,15 +212,13 @@ class _ProfileSetupState extends State<ProfileSetup> {
                       return null;
                     },
                   ),
-
                   const SizedBox(height: 18),
 
-                  // ── BUYER fields ───────────────────────────────
                   if (_isBuyer) ...[
                     _label('What do you import / buy?'),
                     const SizedBox(height: 8),
                     _textField(_whatBuyCtrl,
-                      hint: 'e.g. Electronics, Textiles, Auto parts, Food...',
+                      hint: 'e.g. Electronics, Textiles, Auto parts...',
                       validator: (v) => v == null || v.trim().isEmpty
                           ? 'Please tell us what you buy' : null,
                     ),
@@ -236,7 +240,6 @@ class _ProfileSetupState extends State<ProfileSetup> {
                     const SizedBox(height: 18),
                   ],
 
-                  // ── SELLER fields ──────────────────────────────
                   if (_isSeller) ...[
                     _label('Company / Business name'),
                     const SizedBox(height: 8),
@@ -249,20 +252,17 @@ class _ProfileSetupState extends State<ProfileSetup> {
                     _label('Products / goods you export'),
                     const SizedBox(height: 8),
                     _textField(_productsCtrl,
-                      hint: 'e.g. Machinery, Chemicals, Garments, Steel...',
+                      hint: 'e.g. Machinery, Chemicals, Garments...',
                       validator: (v) => v == null || v.trim().isEmpty
                           ? 'List your products' : null,
                     ),
                     const SizedBox(height: 18),
                     _label('Export / Trade license number (optional)'),
                     const SizedBox(height: 8),
-                    _textField(_licenseCtrl,
-                      hint: 'e.g. EXP-2024-12345',
-                    ),
+                    _textField(_licenseCtrl, hint: 'e.g. EXP-2024-12345'),
                     const SizedBox(height: 18),
                   ],
 
-                  // ── SHIPPER / AGENT fields ─────────────────────
                   if (_isShipper) ...[
                     _label('Vessel / Company name'),
                     const SizedBox(height: 8),
@@ -290,32 +290,23 @@ class _ProfileSetupState extends State<ProfileSetup> {
                     const SizedBox(height: 18),
                     _label('IMO number (optional)'),
                     const SizedBox(height: 8),
-                    _textField(_imoCtrl,
-                      hint: 'e.g. IMO 1234567',
-                    ),
+                    _textField(_imoCtrl, hint: 'e.g. IMO 1234567'),
                     const SizedBox(height: 18),
                   ],
 
-                  // ── COMMON: Location ───────────────────────────
-                  _label(_isBuyer
-                      ? 'Your country / region'
-                      : _isSeller
-                          ? 'Origin port / country'
-                          : 'Home port / base location'),
+                  _label(_isBuyer ? 'Your country / region'
+                      : _isSeller ? 'Origin port / country'
+                      : 'Home port / base location'),
                   const SizedBox(height: 8),
                   _textField(_locationCtrl,
-                    hint: _isBuyer
-                        ? 'e.g. United States, Europe...'
-                        : _isSeller
-                            ? 'e.g. Port of Shanghai, China'
-                            : 'e.g. Port of Singapore',
+                    hint: _isBuyer ? 'e.g. United States, Europe...'
+                        : _isSeller ? 'e.g. Port of Shanghai, China'
+                        : 'e.g. Port of Singapore',
                     validator: (v) => v == null || v.trim().isEmpty
                         ? 'Location required' : null,
                   ),
-
                   const SizedBox(height: 18),
 
-                  // ── COMMON: Bio ────────────────────────────────
                   _label('Short bio (optional)'),
                   const SizedBox(height: 8),
                   TextFormField(
@@ -325,11 +316,9 @@ class _ProfileSetupState extends State<ProfileSetup> {
                     style: const TextStyle(color: Colors.white),
                     decoration: _inp(_biohint).copyWith(
                       counterStyle: TextStyle(
-                          color: Colors.white.withOpacity(0.25),
-                          fontSize: 11),
+                          color: Colors.white.withOpacity(0.25), fontSize: 11),
                     ),
                   ),
-
                   const SizedBox(height: 28),
 
                   SizedBox(
@@ -354,13 +343,25 @@ class _ProfileSetupState extends State<ProfileSetup> {
                                   color: Color(0xFF060F1E))),
                     ),
                   ),
-
                   const SizedBox(height: 14),
-
                   Center(
                     child: TextButton(
-                      onPressed: () => Navigator.pushReplacementNamed(
-                          context, '/dashboard'),
+                      onPressed: () async {
+                        // Skip — still mark profileComplete so they reach dashboard
+                        final uid = FirebaseAuth.instance.currentUser?.uid;
+                        if (uid != null) {
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setBool('profile_complete_$uid', true);
+                          await FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(uid)
+                              .set({'profileComplete': true},
+                                  SetOptions(merge: true));
+                        }
+                        if (mounted) {
+                          Navigator.pushReplacementNamed(context, '/dashboard');
+                        }
+                      },
                       child: Text('Skip for now',
                           style: TextStyle(
                               color: Colors.white.withOpacity(0.3),
@@ -376,28 +377,27 @@ class _ProfileSetupState extends State<ProfileSetup> {
     );
   }
 
-  // ── Helpers ────────────────────────────────────────────────
   String get _headline {
-    if (_isBuyer)   return 'What do you import?';
-    if (_isSeller)  return 'Your business details';
+    if (_isBuyer)  return 'What do you import?';
+    if (_isSeller) return 'Your business details';
     return 'Your shipping profile';
   }
 
   String get _subline {
-    if (_isBuyer)   return 'Help sellers find the right goods for you';
-    if (_isSeller)  return 'Let buyers know what you export';
+    if (_isBuyer)  return 'Help sellers find the right goods for you';
+    if (_isSeller) return 'Let buyers know what you export';
     return 'Tell us about your vessel and routes';
   }
 
   String get _biohint {
-    if (_isBuyer)   return 'e.g. Wholesale buyer of electronics, 10 years in import...';
-    if (_isSeller)  return 'e.g. 15+ years exporting machinery to 30+ countries...';
+    if (_isBuyer)  return 'e.g. Wholesale buyer of electronics...';
+    if (_isSeller) return 'e.g. 15+ years exporting machinery...';
     return 'e.g. Operating trans-Pacific routes for 8 years...';
   }
 
   IconData get _roleIcon {
-    if (_isBuyer)   return Icons.shopping_bag_outlined;
-    if (_isSeller)  return Icons.storefront_outlined;
+    if (_isBuyer)  return Icons.shopping_bag_outlined;
+    if (_isSeller) return Icons.storefront_outlined;
     return Icons.directions_boat_outlined;
   }
 
@@ -405,41 +405,72 @@ class _ProfileSetupState extends State<ProfileSetup> {
       style: TextStyle(color: Colors.white.withOpacity(0.65),
           fontSize: 13, fontWeight: FontWeight.w500));
 
-  Widget _textField(
-    TextEditingController ctrl, {
+  Widget _textField(TextEditingController ctrl, {
     required String hint,
     TextInputType keyboard = TextInputType.text,
     String? Function(String?)? validator,
-  }) =>
-      TextFormField(
-        controller: ctrl,
-        keyboardType: keyboard,
-        style: const TextStyle(color: Colors.white),
-        decoration: _inp(hint),
-        validator: validator,
-      );
+  }) => TextFormField(
+    controller: ctrl,
+    keyboardType: keyboard,
+    style: const TextStyle(color: Colors.white),
+    decoration: _inp(hint),
+    validator: validator,
+  );
 
   InputDecoration _inp(String hint) => InputDecoration(
     hintText: hint,
     hintStyle: TextStyle(color: Colors.white.withOpacity(0.2)),
     filled: true,
     fillColor: Colors.white.withOpacity(0.06),
-    contentPadding:
-        const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: Colors.white.withOpacity(0.08))),
-    enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: Colors.white.withOpacity(0.08))),
-    focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: _gold, width: 1.5)),
-    errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+    errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Colors.redAccent)),
-    focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+    focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Colors.redAccent, width: 1.5)),
     errorStyle: const TextStyle(color: Colors.redAccent),
   );
+}
+
+class _AuthBgPainter extends CustomPainter {
+  final Color navy;
+  final Color gold;
+  _AuthBgPainter(this.navy, this.gold);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
+        Paint()..color = navy);
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      Paint()
+        ..shader = RadialGradient(
+          colors: [gold.withOpacity(0.12), Colors.transparent],
+        ).createShader(Rect.fromCircle(
+            center: Offset(size.width, 0), radius: size.height * 0.7)),
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      Paint()
+        ..shader = RadialGradient(
+          colors: [gold.withOpacity(0.06), Colors.transparent],
+        ).createShader(Rect.fromCircle(
+            center: Offset(0, size.height), radius: size.height * 0.6)),
+    );
+    final line = Paint()
+      ..color = gold.withOpacity(0.03)
+      ..strokeWidth = 1;
+    for (double x = -size.height; x < size.width + size.height; x += 40) {
+      canvas.drawLine(
+          Offset(x, 0), Offset(x + size.height, size.height), line);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_AuthBgPainter old) => false;
 }

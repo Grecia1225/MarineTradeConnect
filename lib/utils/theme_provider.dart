@@ -10,8 +10,6 @@ class AppTheme {
   final Color background;
   final Color card;
   final Color cardLight;
-  final String backgroundImage;
-
   const AppTheme({
     required this.id,
     required this.name,
@@ -20,10 +18,10 @@ class AppTheme {
     required this.background,
     required this.card,
     required this.cardLight,
-    required this.backgroundImage,
   });
 
   static const List<AppTheme> themes = [
+
     AppTheme(
       id: 'navy_gold',
       name: 'Navy & Gold',
@@ -32,8 +30,6 @@ class AppTheme {
       background: Color(0xFF060F1E),
       card: Color(0xFF0D2240),
       cardLight: Color(0xFF1A3A5C),
-      backgroundImage:
-          'https://images.unsplash.com/photo-1505118380757-91f5f5632de0?w=800',
     ),
     AppTheme(
       id: 'midnight_cyan',
@@ -43,8 +39,6 @@ class AppTheme {
       background: Color(0xFF050508),
       card: Color(0xFF0D0D14),
       cardLight: Color(0xFF161622),
-      backgroundImage:
-          'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800',
     ),
     AppTheme(
       id: 'ocean_green',
@@ -54,8 +48,6 @@ class AppTheme {
       background: Color(0xFF021A12),
       card: Color(0xFF052E1E),
       cardLight: Color(0xFF0A4A30),
-      backgroundImage:
-          'https://images.unsplash.com/photo-1505142468610-359e7d316be0?w=800',
     ),
     AppTheme(
       id: 'deep_blue',
@@ -65,8 +57,6 @@ class AppTheme {
       background: Color(0xFF030A1A),
       card: Color(0xFF081428),
       cardLight: Color(0xFF102040),
-      backgroundImage:
-          'https://images.unsplash.com/photo-1518020382113-a7e8fc38eac9?w=800',
     ),
     AppTheme(
       id: 'coral_sunset',
@@ -76,8 +66,6 @@ class AppTheme {
       background: Color(0xFF1A0A0A),
       card: Color(0xFF2A1010),
       cardLight: Color(0xFF3A1818),
-      backgroundImage:
-          'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800',
     ),
   ];
 }
@@ -85,7 +73,6 @@ class AppTheme {
 class ThemeProvider extends ChangeNotifier {
   String _currentThemeId = 'navy_gold';
 
-  // Exposing the themes list so tp.themes works in the screen
   List<AppTheme> get themes => AppTheme.themes;
 
   AppTheme get current => AppTheme.themes.firstWhere(
